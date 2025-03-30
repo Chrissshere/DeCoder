@@ -12,6 +12,7 @@ struct ContentView: View {
     @StateObject private var viewModel = ConversionViewModel()
     @State private var showingRecentConversions = false
     @State private var showingExportSheet = false
+    @State private var showingFileImporter = false
     @State private var exportText = ""
     @AppStorage("isDarkMode") private var isDarkMode = false
     
@@ -21,8 +22,19 @@ struct ContentView: View {
                 VStack(spacing: 24) {
                     // Input Section
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Input Text")
-                            .font(.headline)
+                        HStack {
+                            Text("Input Text")
+                                .font(.headline)
+                            Spacer()
+                            Button(action: { showingFileImporter = true }) {
+                                HStack {
+                                    Image(systemName: "doc.badge.plus")
+                                    Text("Import File")
+                                }
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                            }
+                        }
                         TextField("Enter text to convert", text: $viewModel.inputText)
                             .textFieldStyle(.plain)
                             .padding()
@@ -35,19 +47,22 @@ struct ContentView: View {
                                 RoundedRectangle(cornerRadius: 20)
                                     .stroke(Color.blue.opacity(0.3), lineWidth: 1)
                             )
-                            .autocapitalization(.allCharacters)
                     }
                     .padding(.horizontal)
                     
                     // Format Selection
-                    FormatSelectionView(selectedFormat: $viewModel.selectedFormat)
-                        .frame(height: 400)
+                    FormatSelectionView(
+                        selectedFormat: $viewModel.selectedFormat,
+                        isReverse: $viewModel.isReverse,
+                        caesarShift: $viewModel.caesarShift
+                    )
+                    .frame(height: 400)
                     
                     // Convert Button
                     Button(action: viewModel.convertText) {
                         HStack {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                            Text("Convert")
+                            Image(systemName: viewModel.isReverse ? "arrow.triangle.2.circlepath" : "arrow.right")
+                            Text(viewModel.isReverse ? "Decode" : "Encode")
                         }
                         .font(.headline)
                         .foregroundColor(.white)
@@ -58,6 +73,18 @@ struct ContentView: View {
                     }
                     .padding(.horizontal)
                     
+                    // Progress View for file processing
+                    if let progress = viewModel.conversionProgress {
+                        VStack(spacing: 8) {
+                            ProgressView(value: progress)
+                                .progressViewStyle(.linear)
+                            Text("Processing file...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal)
+                    }
+                    
                     // Output Section
                     if !viewModel.convertedText.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -65,9 +92,17 @@ struct ContentView: View {
                                 Text("Converted Text")
                                     .font(.headline)
                                 Spacer()
-                                Button(action: viewModel.copyToClipboard) {
-                                    Image(systemName: "doc.on.doc")
-                                        .foregroundColor(.blue)
+                                HStack(spacing: 16) {
+                                    Button(action: viewModel.copyToClipboard) {
+                                        Image(systemName: "doc.on.doc")
+                                            .foregroundColor(.blue)
+                                    }
+                                    if viewModel.isProcessingFile {
+                                        ShareLink(item: viewModel.convertedText) {
+                                            Image(systemName: "square.and.arrow.up")
+                                                .foregroundColor(.blue)
+                                        }
+                                    }
                                 }
                             }
                             
@@ -100,7 +135,7 @@ struct ContentView: View {
                             }) {
                                 HStack {
                                     Image(systemName: "square.and.arrow.up")
-                                    Text("Export")
+                                    Text("Export History")
                                 }
                                 .foregroundColor(.blue)
                             }
@@ -143,6 +178,20 @@ struct ContentView: View {
                             }
                         }
                     }
+                }
+            }
+            .fileImporter(
+                isPresented: $showingFileImporter,
+                allowedContentTypes: FileManager.textTypes,
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    guard let url = urls.first else { return }
+                    viewModel.processFile(url)
+                case .failure(let error):
+                    viewModel.errorMessage = error.localizedDescription
+                    viewModel.showingError = true
                 }
             }
             .alert("Error", isPresented: $viewModel.showingError) {

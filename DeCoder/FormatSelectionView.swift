@@ -2,6 +2,8 @@ import SwiftUI
 
 struct FormatSelectionView: View {
     @Binding var selectedFormat: ConversionFormat
+    @Binding var isReverse: Bool
+    @Binding var caesarShift: Int
     
     // Use fixed 2-column grid
     private let columns = [
@@ -17,12 +19,36 @@ struct FormatSelectionView: View {
                         .onTapGesture {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 selectedFormat = format
+                                // Reset reverse when switching to non-supporting format
+                                if !format.supportsReverseConversion {
+                                    isReverse = false
+                                }
                             }
                         }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
+            
+            if selectedFormat.supportsReverseConversion {
+                Toggle("Reverse Conversion", isOn: $isReverse)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+            }
+            
+            if selectedFormat == .caesar {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Caesar Shift: \(caesarShift)")
+                        .font(.subheadline)
+                    
+                    Slider(value: .init(
+                        get: { Double(caesarShift) },
+                        set: { caesarShift = Int($0) }
+                    ), in: 1...25, step: 1)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+            }
         }
     }
 }
@@ -33,11 +59,22 @@ struct FormatCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Icon at the top
-            Image(systemName: format.icon)
-                .font(.system(size: 24, weight: .medium))
-                .foregroundColor(isSelected ? .white : .blue)
-                .frame(width: 32, height: 32)
+            HStack {
+                // Icon at the top
+                Image(systemName: format.icon)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(isSelected ? .white : .blue)
+                    .frame(width: 32, height: 32)
+                
+                Spacer()
+                
+                // Reverse indicator
+                if format.supportsReverseConversion {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 14))
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                }
+            }
             
             // Title
             Text(format.rawValue)
@@ -70,5 +107,9 @@ struct FormatCard: View {
 }
 
 #Preview {
-    FormatSelectionView(selectedFormat: .constant(.morse))
+    FormatSelectionView(
+        selectedFormat: .constant(.morse),
+        isReverse: .constant(false),
+        caesarShift: .constant(3)
+    )
 } 
